@@ -79,7 +79,7 @@ struct EditorView: View {
                 .keyboardShortcut("n", modifiers: .command)
             creationButton("New timer", symbol: "timer", action: windows.newTimer)
                 .keyboardShortcut("t", modifiers: .command)
-            Toggle("Launch at login", isOn: Binding(get: { loginItem.enabled || loginItem.needsApproval }, set: loginItem.setEnabled))
+            Toggle("Launch at login", isOn: Binding(get: { loginItem.enabled || loginItem.needsApproval }, set: { loginItem.setEnabled($0) }))
                 .toggleStyle(.switch).controlSize(.small).font(.system(size: 11)).fixedSize()
                 .help("Restore your visible widgets when you log in, including after a restart")
             if loginItem.needsApproval || loginItem.message != nil {

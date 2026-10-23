@@ -15,7 +15,7 @@ Review the upload set before committing:
 ```sh
 git status --short --untracked-files=all
 ./scripts/test.sh
-./scripts/package-release.sh v2.6.2
+./scripts/package-release.sh v2.6.3
 ```
 
 If the repository has not already been created:
@@ -33,11 +33,11 @@ These commands publish the project publicly. Authenticate with `gh auth login` f
 
 1. Update `CFBundleShortVersionString` in `Resources/Info.plist` and increment `CFBundleVersion`. Keep the existing bundle identifier stable so installed apps retain their identity.
 2. Run tests and commit the change. Push the commit to `main`.
-3. Push a matching tag, such as `v2.6.2` for the initial release:
+3. Push a matching tag, such as `v2.6.3` for the initial release:
 
    ```sh
-   git tag v2.6.2
-   git push origin v2.6.2
+   git tag v2.6.3
+   git push origin v2.6.3
    ```
 
 4. GitHub Actions tests the app, builds both architectures, combines them into a universal app, and creates a **draft** release with `Daylight-macOS-universal.zip` and `SHA256SUMS.txt`.
@@ -55,7 +55,7 @@ Draft releases are not publicly downloadable. Keep the asset name stable. Do not
 ## Local packaging and verification
 
 ```sh
-./scripts/package-release.sh v2.6.2
+./scripts/package-release.sh v2.6.3
 (cd dist && shasum -a 256 -c SHA256SUMS.txt)
 lipo -info build/release/Daylight.app/Contents/MacOS/Daylight
 codesign --verify --strict build/release/Daylight.app
@@ -72,7 +72,7 @@ For a smoother installation experience, enroll in the Apple Developer Program, o
 ```sh
 DEVELOPER_ID_APPLICATION='Developer ID Application: Your Name (TEAMID)' \
 NOTARY_PROFILE='daylight-notary' \
-./scripts/package-release.sh v2.6.2
+./scripts/package-release.sh v2.6.3
 ```
 
 The script signs with hardened runtime, submits to Apple, staples and validates the ticket, assesses the app with Gatekeeper, then creates the final ZIP and checksum. This optional path requires real credentials and has not been verified without them. Upload both resulting files in place of the draft's ad-hoc assets, and update the README and release notes to describe the actual signing status before publishing.
