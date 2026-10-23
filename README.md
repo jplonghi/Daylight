@@ -36,7 +36,7 @@ Read the [user guide](docs/user-guide.md) for controls, shortcuts, timer behavio
 
 ## Build from source
 
-Requires macOS 14+ and Xcode 16+ with Swift 6 or newer. Select the Xcode command-line tools in Xcode settings before building.
+Requires macOS 14+ and Xcode 26.6+ with Swift 6.3 or newer. Select the Xcode command-line tools in Xcode settings before building.
 
 ```sh
 ./scripts/test.sh

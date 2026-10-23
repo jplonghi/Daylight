@@ -9,11 +9,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Test
         run: ./scripts/test.sh
       - name: Build universal app and checksum
