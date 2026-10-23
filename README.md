@@ -16,6 +16,14 @@ Make room for the days that matter. Beautiful countdowns and focus timers, right
 
 No account, subscription, or developer tools needed.
 
+### Install with Homebrew
+
+```sh
+brew install --cask jplonghi/tap/daylight
+```
+
+If Daylight is already in Applications, quit it and remove only the old `Daylight.app` before installing with Homebrew. Your saved countdowns remain in place. [Homebrew tap and uninstall instructions](https://github.com/jplonghi/homebrew-tap)
+
 ### First time opening Daylight?
 
 Daylight is not yet notarized by Apple, so macOS may block its first launch. If you trust this download, try opening Daylight from Applications, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. [See Apple's illustrated instructions](https://support.apple.com/en-us/102445).
@@ -47,7 +55,16 @@ Daylight uses its own desktop windows, so you open it from Applications rather t
 
 ## Updating Daylight
 
-Quit Daylight, download the latest DMG using the button above, and drag the new app into Applications. Choose **Replace** when asked. Your saved countdowns remain in place. Updates are currently manual.
+Quit Daylight, download the latest DMG using the button above, and drag the new app into Applications. Choose **Replace** when asked. Your saved countdowns remain in place.
+
+If you installed with Homebrew, quit Daylight and run:
+
+```sh
+brew update
+brew upgrade --cask jplonghi/tap/daylight
+```
+
+The Homebrew tap checks for new stable releases every six hours; updates can appear later than the direct download. Daylight does not update itself automatically.
 
 ## For developers
 

@@ -81,9 +81,19 @@ Never commit signing certificates, private keys, or passwords. Automated notariz
 
 ## Updates and uninstalling
 
-Users quit Daylight and replace its app in Applications with the newest download. There is no automatic updater or Homebrew formula yet. Local data remains under `~/Library/Application Support/Daylight/`.
+Users quit Daylight and replace its app in Applications with the newest download, or run `brew update` followed by `brew upgrade --cask jplonghi/tap/daylight` if they installed through Homebrew. There is no automatic updater inside the app. Local data remains under `~/Library/Application Support/Daylight/`.
 
 To uninstall, disable Launch at login, quit the app, and remove it from Applications. Deleting the separate data folder is optional and permanently removes saved countdowns.
+
+## Homebrew distribution
+
+The public [jplonghi/homebrew-tap](https://github.com/jplonghi/homebrew-tap) repository contains `Casks/daylight.rb` and its update workflow. Users install with `brew install --cask jplonghi/tap/daylight` and uninstall with `brew uninstall --cask jplonghi/tap/daylight`. Normal uninstall preserves saved countdowns.
+
+After publishing a stable release and marking it latest, run **Update Daylight cask** from the tap's Actions tab to make it available promptly, or wait for the six-hour schedule. The tap downloads the DMG and `SHA256SUMS.txt`, verifies the checksum, and commits the new version and checksum using its own Actions token. Drafts and prereleases are excluded. No cross-repository credential is required.
+
+Keep version tags in `vMAJOR.MINOR.PATCH` format and retain the existing asset names and checksum format. The updater rejects downgrades and modified assets for an existing version. Check the workflow result after publishing; scheduled runs may be delayed or disabled by GitHub after repository inactivity. A manual run is available as a fallback.
+
+The tap preserves Gatekeeper behavior. When signed, notarized releases become available, remove the unsigned-release caveat from the cask and update both READMEs. Submission to Homebrew's official catalog is a separate future step.
 
 ## README images
 

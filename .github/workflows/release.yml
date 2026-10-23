@@ -28,7 +28,9 @@ jobs:
 
           This build is ad-hoc signed and is **not notarized by Apple**. macOS may block the first launch. If you trust this download, follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445).
 
-          The ZIP is also available as an alternative. Updates are manual. The automatically generated source-code archives are for developers.
+          You can also install with `brew install --cask jplonghi/tap/daylight`. Homebrew users can quit Daylight, run `brew update`, then `brew upgrade --cask jplonghi/tap/daylight`. The tap checks for new stable releases every six hours, so Homebrew availability may lag this download.
+
+          The ZIP is also available as an alternative. The automatically generated source-code archives are for developers.
           NOTES
       - name: Create draft release
         env:
