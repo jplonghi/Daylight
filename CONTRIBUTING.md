@@ -1,6 +1,6 @@
 # Contributing to Daylight
 
-Use macOS 14+ and Xcode 26.6+ (Swift 6.3+). Open `Package.swift` in Xcode, or use the scripts below.
+Use Xcode 26.6+ (Swift 6.3+) on a macOS version supported by Xcode. The app targets macOS 14+. Open `Package.swift` in Xcode, or use the scripts below.
 
 ```sh
 ./scripts/test.sh

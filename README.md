@@ -18,8 +18,6 @@ The initial release workflow uses an ad-hoc signature and does **not** notarize 
 
 To update, quit Daylight, download the latest ZIP, and replace the app in Applications. Your countdowns are stored separately and remain in place. Updates are manual; the app does not check for updates in the background.
 
-> Downloads become available after the first release is published. See the [publishing guide](docs/releasing.md).
-
 ![Daylight editor showing a Day grid countdown and color presets](docs/images/daylight.png)
 
 ## What it does
@@ -36,7 +34,7 @@ Read the [user guide](docs/user-guide.md) for controls, shortcuts, timer behavio
 
 ## Build from source
 
-Requires macOS 14+ and Xcode 26.6+ with Swift 6.3 or newer. Select the Xcode command-line tools in Xcode settings before building.
+Requires Xcode 26.6+ with Swift 6.3 or newer, on a macOS version supported by Xcode. The built app targets macOS 14+. Select the Xcode command-line tools in Xcode settings before building.
 
 ```sh
 ./scripts/test.sh
