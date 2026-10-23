@@ -1,0 +1,22 @@
+# Generated Swift and app output
+.build/
+.swiftpm/
+build/
+dist/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Local QA captures, reports, and fixtures
+docs/evidence/
+
+# Machine files and secrets
+.DS_Store
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+*.keychain-db

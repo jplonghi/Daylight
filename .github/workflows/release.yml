@@ -1,0 +1,40 @@
+name: Package release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: ./scripts/test.sh
+      - name: Build universal app and checksum
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: ./scripts/package-release.sh "$RELEASE_TAG"
+      - name: Prepare release notes
+        run: |
+          cat > build/release-notes.md <<'NOTES'
+          Download **Daylight-macOS-universal.zip** for macOS 14 or later (Apple silicon and Intel).
+          Unzip it, move Daylight.app to Applications, and open it. Quit any existing copy before replacing it.
+
+          This build is ad-hoc signed and is **not notarized by Apple**. macOS may block the first launch. If you trust this download, follow [Apple's Open Anyway instructions](https://support.apple.com/en-us/102445).
+
+          Updates are manual. Download this app ZIP, not the automatically generated source-code archives.
+          NOTES
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/Daylight-macOS-universal.zip dist/SHA256SUMS.txt \
+            --verify-tag --draft --title "Daylight $RELEASE_TAG" --notes-file build/release-notes.md
