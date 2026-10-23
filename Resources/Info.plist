@@ -5,8 +5,8 @@
     <key>CFBundleDisplayName</key><string>Daylight</string>
     <key>CFBundleExecutable</key><string>Daylight</string>
     <key>CFBundleIdentifier</key><string>com.local.daylight.countdown</string>
-    <key>CFBundleVersion</key><string>14</string>
-    <key>CFBundleShortVersionString</key><string>2.6.3</string>
+    <key>CFBundleVersion</key><string>15</string>
+    <key>CFBundleShortVersionString</key><string>2.6.4</string>
     <key>LSUIElement</key><true/>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>

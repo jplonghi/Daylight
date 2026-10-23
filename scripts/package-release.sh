@@ -23,5 +23,6 @@ if [[ -n "${NOTARY_PROFILE:-}" ]]; then
 fi
 rm -f "$archive"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-(cd dist && shasum -a 256 Daylight-macOS-universal.zip > SHA256SUMS.txt)
+./scripts/create-dmg.sh
+(cd dist && shasum -a 256 Daylight-macOS-universal.dmg Daylight-macOS-universal.zip > SHA256SUMS.txt)
 print "Packaged Daylight $version: $archive"

@@ -1,40 +1,57 @@
 # Daylight
 
-Countdowns and focus timers that live on your Mac desktop.
+Make room for the days that matter. Beautiful countdowns and focus timers, right on your Mac desktop.
 
-Choose Number, Ring, Flip clock, or Day grid; give each occasion its own colors and size; and pick up where you left off after restarting. Built with SwiftUI and AppKit, with no external packages, accounts, tracking, or network requests.
+[![Download for Mac — DMG for Apple silicon and Intel](docs/images/download-mac.svg)](https://github.com/jplonghi/Daylight/releases/latest/download/Daylight-macOS-universal.dmg)
 
-## Download and install
+**macOS 14 Sonoma or later · Apple silicon & Intel · Free & open source**
 
-**[Download the latest Mac app](https://github.com/jplonghi/Daylight/releases/latest/download/Daylight-macOS-universal.zip)** · [Release notes](https://github.com/jplonghi/Daylight/releases/latest)
+[Release notes](https://github.com/jplonghi/Daylight/releases/latest) · [Prefer a ZIP?](https://github.com/jplonghi/Daylight/releases/latest/download/Daylight-macOS-universal.zip)
 
-Requires **macOS 14 Sonoma or later**. The release ZIP supports **Apple silicon and Intel Macs**. No Xcode or developer tools are needed to use the downloaded app.
+## Install in three steps
 
-1. Download `Daylight-macOS-universal.zip` and double-click it to unzip.
-2. Move **Daylight.app** to **Applications**.
-3. Open Daylight and create a countdown or focus timer.
+1. **Download and open** `Daylight-macOS-universal.dmg` using the button above.
+2. **Drag Daylight into Applications** using the folder shortcut inside the disk image.
+3. **Eject the disk image**, then open **Daylight** from Applications.
 
-The initial release workflow uses an ad-hoc signature and does **not** notarize the app. If macOS blocks it as an unidentified developer, and you trust the release, attempt to open it, then use **System Settings → Privacy & Security → Open Anyway**. See [Apple's instructions](https://support.apple.com/en-us/102445). There is no need to disable Gatekeeper globally.
+No account, subscription, or developer tools needed.
 
-To update, quit Daylight, download the latest ZIP, and replace the app in Applications. Your countdowns are stored separately and remain in place. Updates are manual; the app does not check for updates in the background.
+### First time opening Daylight?
 
-![Daylight editor showing a Day grid countdown and color presets](docs/images/daylight.png)
+Daylight is not yet notarized by Apple, so macOS may block its first launch. If you trust this download, try opening Daylight from Applications, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. [See Apple's illustrated instructions](https://support.apple.com/en-us/102445).
 
-## What it does
+## Your next occasion, at a glance
 
-- Independent desktop countdowns with four styles, ten color presets, and four sizes.
-- Focus timers with a repeating chime and acknowledgment.
-- Drag, resize, hide, pin above other windows, or arrange widgets by deadline.
-- Menu-bar controls, optional launch at login, and saved window positions.
-- Local data, accessible summaries, keyboard shortcuts, and Reduce Motion support.
+Add a trip, a birthday, a new chapter, or a date that is just for you. Choose a style and color palette, then put the countdown where you want it.
 
-Daylight uses desktop windows; it is not a widget in macOS's Edit Widgets gallery.
+![Daylight's main window, with occasion tabs, color presets, and a live countdown preview](docs/images/daylight.png)
 
-Read the [user guide](docs/user-guide.md) for controls, shortcuts, timer behavior, and data recovery.
+## Four ways to watch the days go by
 
-## Build from source
+Keep it simple with **Number**, see your progress with **Ring**, count down with **Flip clock**, or watch **Day grid** fill in one day at a time. Each occasion can have its own style, colors, and size.
 
-Requires Xcode 26.6+ with Swift 6.3 or newer, on a macOS version supported by Xcode. The built app targets macOS 14+. Select the Xcode command-line tools in Xcode settings before building.
+![Four Daylight countdown styles rendered with demo occasions: Number, Ring, Flip clock, and Day grid](docs/images/countdown-styles.png)
+
+*Rendered from Daylight's actual countdown views with example occasions.*
+
+## Make yourself at home
+
+- **Focus for a while.** Start a timer and hear a gentle repeating chime when it finishes.
+- **Arrange your desktop.** Drag, resize, hide, or keep a countdown above other windows.
+- **Pick up where you left off.** Your occasions and window positions are saved; launch at login is optional.
+- **Keep it personal.** Your data stays on your Mac. No accounts, tracking, or network requests from the app.
+
+Daylight uses its own desktop windows, so you open it from Applications rather than macOS's Edit Widgets gallery.
+
+[Explore the user guide →](docs/user-guide.md)
+
+## Updating Daylight
+
+Quit Daylight, download the latest DMG using the button above, and drag the new app into Applications. Choose **Replace** when asked. Your saved countdowns remain in place. Updates are currently manual.
+
+## For developers
+
+Built with SwiftUI and AppKit, with no external packages. Use Xcode 26.6+ (Swift 6.3+) on a macOS version supported by Xcode; the app targets macOS 14+.
 
 ```sh
 ./scripts/test.sh
@@ -42,32 +59,11 @@ Requires Xcode 26.6+ with Swift 6.3 or newer, on a macOS version supported by Xc
 open build/Daylight.app
 ```
 
-Open `Package.swift` in Xcode to work on the app. To create the same universal ZIP used for GitHub Releases:
+Open `Package.swift` in Xcode to develop the app. `./scripts/package-release.sh` creates the universal DMG, ZIP, and checksums in `dist/`.
 
-```sh
-./scripts/package-release.sh
-```
+[Contributing](CONTRIBUTING.md) · [Build and release guide](docs/releasing.md) · [Design notes](docs/design.md)
 
-The ZIP and SHA-256 checksum are written to `dist/`. The release app is built separately in `build/release/Daylight.app`.
-
-## Repository layout
-
-```text
-.github/workflows/    Automated tests and release packaging
-Sources/Daylight/     SwiftUI views and macOS integration
-Sources/DaylightCore/ Countdown, timer, persistence, and layout logic
-Tests/               Core behavior tests
-Resources/           App metadata and original timer chime
-scripts/             Build, test, icon, and release tools
-docs/                User, contributor, design, and publishing guides
-Package.swift        Swift package definition
-```
-
-`.build/`, `build/`, `dist/`, and `docs/evidence/` stay local and are ignored by Git. Compiled apps belong in **GitHub Release assets**, not in the source repository.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Please include your macOS version and reproduction steps when reporting a bug; remove personal countdowns and local paths from screenshots and logs.
+Source lives in `Sources/`, tests in `Tests/`, and app assets in `Resources/`. Generated builds and local QA captures are ignored by Git; downloadable apps live in GitHub Releases.
 
 ## License
 
