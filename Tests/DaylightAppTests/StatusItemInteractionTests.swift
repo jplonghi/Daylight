@@ -120,14 +120,16 @@ final class StatusItemInteractionTests: XCTestCase {
         XCTAssertNil(controller.editorWindow)
         // The menu's Manage countdowns action opens the editor.
         controller.showEditor()
-        try await Task.sleep(for: .milliseconds(100))
         let editor = try XCTUnwrap(controller.editorWindow)
         XCTAssertTrue(editor.isVisible)
         XCTAssertEqual(controller.widgetWindows[library.entries[1].id]?.level, .normal,
                        "Opening the editor must not toggle tiles.")
 
-        // Bringing the tiles forward again must also work while the editor is already open.
+        // Raise tiles immediately after showing the editor: an unnecessary Dock
+        // restore used to bring the editor back above them on a later run-loop turn.
+        let editorKeyWindow = app.keyWindow
         try await singleClick()
+        XCTAssertTrue(app.keyWindow === editorKeyWindow, "Raising tiles must preserve keyboard focus in the editor.")
         let afterSingleClick = app.orderedWindows
         let editorIndex = try XCTUnwrap(afterSingleClick.firstIndex { $0 === editor })
         for window in controller.widgetWindows.values {

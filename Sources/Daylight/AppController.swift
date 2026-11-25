@@ -152,7 +152,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
             if !window.setFrameUsingName("Daylight.Editor.v2") { window.center() }
             editorWindow = window
         }
-        editorWindow?.deminiaturize(nil)
+        // Even an unminimized window can receive a delayed Dock restore response,
+        // which would raise the editor over tiles after a later status-item click.
+        if editorWindow?.isMiniaturized == true { editorWindow?.deminiaturize(nil) }
         NSApp.activate(ignoringOtherApps: true)
         editorWindow?.makeKeyAndOrderFront(nil)
     }
