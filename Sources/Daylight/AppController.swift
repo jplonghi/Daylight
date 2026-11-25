@@ -8,9 +8,22 @@ struct DisplayChoice: Identifiable {
     let name: String
 }
 
+private let displayReconfigurationCallback: CGDisplayReconfigurationCallBack = { _, flags, context in
+    guard let context else { return }
+    let controller = Unmanaged<AppController>.fromOpaque(context).takeUnretainedValue()
+    DispatchQueue.main.async {
+        if flags.contains(.beginConfigurationFlag) {
+            controller.beginDisplayReconfiguration()
+        } else {
+            controller.refreshDisplays()
+        }
+    }
+}
+
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate, ObservableObject {
-    let store = CountdownStore()
+    let store: CountdownStore
+    private let displaySource: (() -> [WidgetDisplay])?
     let loginItem = LoginItem()
     @Published var arrangementMessage: String?
     var editorWindow: NSWindow?
@@ -23,18 +36,33 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     private var timerActivity: NSObjectProtocol?
     private var announcedTimers: Set<UUID> = []
     private var statusItem: NSStatusItem?
+    private var statusMenu: NSMenu?
+    private enum TilePresentation { case normal, raised, lowered }
+    private var tilePresentation = TilePresentation.normal
     private var subscription: AnyCancellable?
     private var timer: Timer?
     private var tileHoverTimer: Timer?
     private var terminating = false
     private var restoringFrame = false
     private var placementSaveTasks: [UUID: Task<Void, Never>] = [:]
+    private var userPlacementEdits: Set<UUID> = []
+    private var displayConfigurationChanging = false
+    private var displayRefreshTask: Task<Void, Never>?
+    private var displayLayouts = DisplayLayoutSession()
     var widgetFullScreen: Bool { store.selectedID.map { fullScreenIDs.contains($0) } ?? false }
+
+    init(store: CountdownStore = CountdownStore(), displaySource: (() -> [WidgetDisplay])? = nil) {
+        self.store = store
+        self.displaySource = displaySource
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         buildMenu()
         buildStatusItem()
+        store.updateLibrary { _ = displayLayouts.activate(currentWidgetDisplays(), in: &$0) }
+        CGDisplayRegisterReconfigurationCallback(displayReconfigurationCallback, Unmanaged.passUnretained(self).toOpaque())
         refreshDisplays()
         NotificationCenter.default.addObserver(self, selector: #selector(refreshDisplays), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(refreshAfterWake), name: NSWorkspace.didWakeNotification, object: nil)
@@ -94,6 +122,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         return .terminateNow
     }
     func applicationWillTerminate(_ notification: Notification) {
+        CGDisplayRemoveReconfigurationCallback(displayReconfigurationCallback, Unmanaged.passUnretained(self).toOpaque())
+        displayRefreshTask?.cancel()
         tileHoverTimer?.invalidate()
         alarmSound?.stop()
         if let timerActivity { ProcessInfo.processInfo.endActivity(timerActivity) }
@@ -105,6 +135,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     }
 
     @objc func showEditor() {
+        if tilePresentation == .raised { tilePresentation = .normal }
         if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
         if editorWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 800), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -176,8 +207,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     @objc func showSelectedWidget() { if let id = store.selectedID { showWidget(id) } }
     func showWidget(_ id: UUID) {
         guard let entry = store.entry(id) else { return }
+        tilePresentation = .normal
         store.setVisible(id, true)
         let window = ensureWidget(entry)
+        applyWindowOptions(entry)
         if editorWindow?.isVisible == true {
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
@@ -186,7 +219,29 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         }
     }
     @objc func showAllWidgets() { store.setAllVisible(true); syncWindows(store.library) }
-    @objc func hideAllWidgets() { store.setAllVisible(false); syncWindows(store.library) }
+    @objc func bringAllWidgetsToFront() {
+        tilePresentation = .raised
+        showAllWidgets()
+        for entry in store.entries {
+            guard let window = widgetWindows[entry.id] else { continue }
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.orderFrontRegardless()
+        }
+    }
+    private func sendAllWidgetsToBack() {
+        tilePresentation = .lowered
+        for entry in store.entries {
+            guard let window = widgetWindows[entry.id], !fullScreenIDs.contains(entry.id),
+                  !window.styleMask.contains(.fullScreen) else { continue }
+            // Temporarily lower pinned tiles too, while retaining the saved preference.
+            applyWindowOptions(entry)
+            window.orderBack(nil)
+        }
+    }
+    @objc func hideAllWidgets() {
+        tilePresentation = .normal
+        store.setAllVisible(false); syncWindows(store.library)
+    }
     @objc func autoArrange() {
         guard fullScreenIDs.isEmpty else {
             arrangementMessage = "Exit full screen before arranging tiles."
@@ -198,7 +253,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         let items = entries.map { entry in
             let current = widgetWindows[entry.id]?.screen
             let index = screens.firstIndex { $0 === current } ?? screens.firstIndex {
-                stableDisplayID($0) == entry.placement?.displayID
+                stableDisplayID($0) == displayLayouts.placement(for: entry)?.displayID
             } ?? 0
             return TileArrangement.Item(id: entry.id, size: dimensions(entry.countdown.size), screenIndex: index)
         }
@@ -209,7 +264,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         }
         restoringFrame = false
         for placement in result.placements {
-            if let window = widgetWindows[placement.id] { savePlacement(placement.id, window) }
+            if let window = widgetWindows[placement.id] { savePlacement(placement.id, window, userInitiated: true) }
         }
         store.saveNow()
         arrangementMessage = result.unplaced.isEmpty ? nil : "Not enough space on their current displays for \(result.unplaced.count) more tiles at X-small. Those tiles kept their previous positions."
@@ -234,7 +289,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
             if isNew { window.orderFront(nil) }
         }
         updateTileHoverTimer()
-        if editorWindow?.isKeyWindow == true { editorWindow?.orderFront(nil) }
+        if tilePresentation != .raised, editorWindow?.isKeyWindow == true { editorWindow?.orderFront(nil) }
     }
 
     private func ensureWidget(_ entry: CountdownEntry) -> NSWindow {
@@ -242,6 +297,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         let size = dimensions(entry.countdown.size)
         let window = TileWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.openEditor = { [weak self] in self?.edit(entry.id) }
+        window.beginUserMove = { [weak self] in self?.userPlacementEdits.insert(entry.id) }
         window.selectOccasion = { [weak self] in
             guard let self, self.editorWindow?.isVisible == true else { return }
             self.edit(entry.id)
@@ -263,15 +319,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         window.isReleasedWhenClosed = false
         widgetWindows[entry.id] = window
         restoringFrame = true
-        if let placement = entry.placement {
-            if let screen = NSScreen.screens.first(where: { stableDisplayID($0) == placement.displayID }) {
-                window.setFrame(placement.frame(in: screen.visibleFrame), display: false)
-            } else if let screen = NSScreen.main {
-                var fallback = placement
-                fallback.x = (screen.visibleFrame.width - min(placement.width, screen.visibleFrame.width)) / 2
-                fallback.y = (screen.visibleFrame.height - min(placement.height, screen.visibleFrame.height)) / 2
-                window.setFrame(fallback.frame(in: screen.visibleFrame), display: false)
-            }
+        if let placement = displayLayouts.placement(for: entry, index: store.entries.firstIndex { $0.id == entry.id } ?? 0) {
+            restorePlacement(placement, to: window)
         } else if store.entries.count == 1 && window.setFrameUsingName("Daylight.Desktop") {
             recoverOffscreenWindow(window)
         } else {
@@ -290,7 +339,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         // A separate turn avoids modifying SwiftUI state while constructing a view.
         DispatchQueue.main.async { [weak self, weak window] in
             guard let self, let window, self.widgetWindows[entry.id] === window else { return }
-            self.savePlacement(entry.id, window)
+            self.store.updateLibrary { self.displayLayouts.ensurePlacements(in: &$0) }
         }
         return window
     }
@@ -300,20 +349,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         guard !fullScreenIDs.contains(id) else { return }
         let target = dimensions(size)
         guard let window = widgetWindows[id] else {
-            store.update(id) { entry in
-                guard var placement = entry.placement else { return }
-                placement.x += (placement.width - target.width) / 2
-                placement.y += (placement.height - target.height) / 2
-                placement.width = target.width
-                placement.height = target.height
-                entry.placement = placement
-            }
+            guard let entry = store.entry(id), var placement = displayLayouts.placement(for: entry) else { return }
+            placement.x += (placement.width - target.width) / 2
+            placement.y += (placement.height - target.height) / 2
+            placement.width = target.width
+            placement.height = target.height
+            displayLayouts.recordEdit(placement, for: id, currentDisplays: currentWidgetDisplays())
+            store.updateLibrary { displayLayouts.flushEdits(in: &$0) }
             return
         }
         guard let screen = window.screen ?? NSScreen.main else { return }
         let placement = WidgetPlacement(x: window.frame.midX - target.width / 2 - screen.visibleFrame.minX,
                                         y: window.frame.midY - target.height / 2 - screen.visibleFrame.minY,
                                         width: target.width, height: target.height, displayID: stableDisplayID(screen))
+        userPlacementEdits.insert(id)
         window.setFrame(placement.frame(in: screen.visibleFrame), display: true, animate: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
@@ -324,8 +373,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         let visible = screen.visibleFrame
         let placement = WidgetPlacement(x: (visible.width - window.frame.width) / 2, y: (visible.height - window.frame.height) / 2,
                                         width: window.frame.width, height: window.frame.height, displayID: stableDisplayID(screen))
+        userPlacementEdits.insert(id)
         window.setFrame(placement.frame(in: visible), display: true)
-        savePlacement(id, window)
+        savePlacement(id, window, userInitiated: true)
     }
 
     @objc func toggleSelectedFullScreen() { if let id = activeCountdownID { toggleFullScreen(id) } }
@@ -358,8 +408,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     func windowDidExitFullScreen(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, let id = id(for: window) else { return }
         fullScreenIDs.remove(id)
-        if let entry = store.entry(id) { applyWindowOptions(entry) }
-        savePlacement(id, window)
+        if let entry = store.entry(id) {
+            if let placement = displayLayouts.placement(for: entry) {
+                restoringFrame = true
+                restorePlacement(placement, to: window)
+                restoringFrame = false
+            }
+            applyWindowOptions(entry)
+        }
     }
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         guard let id = id(for: window) else { return }
@@ -384,7 +440,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     func windowDidMove(_ notification: Notification) { recordPlacement(notification) }
     func windowDidResize(_ notification: Notification) { recordPlacement(notification) }
     private func recordPlacement(_ notification: Notification) {
-        guard !restoringFrame, let window = notification.object as? NSWindow, let id = id(for: window) else { return }
+        guard !restoringFrame, !displayConfigurationChanging,
+              let window = notification.object as? NSWindow, let id = id(for: window),
+              !fullScreenIDs.contains(id), !window.styleMask.contains(.fullScreen) else { return }
+        guard userPlacementEdits.contains(id) else {
+            // A dock can issue a final Window Server move after screens have settled.
+            // Reapply the layout instead of treating that move as a user's edit.
+            if let entry = store.entry(id), let placement = displayLayouts.placement(for: entry),
+               let expected = placement.restoredFrame(on: currentWidgetDisplays()), window.frame != expected {
+                refreshDisplays()
+            }
+            return
+        }
+        capturePlacementEdit(id, window)
         placementSaveTasks[id]?.cancel()
         placementSaveTasks[id] = Task { @MainActor [weak self, weak window] in
             do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
@@ -394,16 +462,32 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
             self.savePlacement(id, window)
         }
     }
+    func windowWillStartLiveResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, let id = id(for: window) else { return }
+        userPlacementEdits.insert(id)
+    }
     func windowDidEndLiveResize(_ notification: Notification) {
         guard !restoringFrame, let window = notification.object as? NSWindow, let id = id(for: window) else { return }
+        if userPlacementEdits.contains(id) { capturePlacementEdit(id, window) }
         savePlacement(id, window)
     }
-    private func savePlacement(_ id: UUID, _ window: NSWindow) {
+    private func savePlacement(_ id: UUID, _ window: NSWindow, userInitiated: Bool = false) {
         placementSaveTasks.removeValue(forKey: id)?.cancel()
-        guard !fullScreenIDs.contains(id), !window.styleMask.contains(.fullScreen), let screen = window.screen else { return }
-        let placement = WidgetPlacement(x: window.frame.minX - screen.visibleFrame.minX, y: window.frame.minY - screen.visibleFrame.minY,
-                                        width: window.frame.width, height: window.frame.height, displayID: stableDisplayID(screen))
-        store.update(id) { $0.placement = placement }
+        if userInitiated { capturePlacementEdit(id, window) }
+        // A drag can pause longer than the save debounce before crossing displays.
+        if NSEvent.pressedMouseButtons & 1 == 0 { userPlacementEdits.remove(id) }
+        store.updateLibrary { displayLayouts.flushEdits(in: &$0) }
+    }
+    private func capturePlacementEdit(_ id: UUID, _ window: NSWindow) {
+        guard !restoringFrame, !displayConfigurationChanging,
+              !fullScreenIDs.contains(id), !window.styleMask.contains(.fullScreen) else { return }
+        let screens = currentWidgetDisplays()
+        // Use geometry rather than NSWindow.screen, which can lag behind a cross-display drag.
+        guard let screen = screens.max(by: {
+            let a = $0.visibleFrame.intersection(window.frame), b = $1.visibleFrame.intersection(window.frame)
+            return a.width * a.height < b.width * b.height
+        }), screen.visibleFrame.intersects(window.frame) else { return }
+        displayLayouts.recordEdit(WidgetPlacement(frame: window.frame, on: screen), for: id, currentDisplays: screens)
     }
 
     private func applyWindowOptions(_ entry: CountdownEntry) {
@@ -415,7 +499,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         (window as? TileWindow)?.hasAcknowledgmentButton = entry.timer?.snapshot().isFinished == true
         guard !fullScreenIDs.contains(entry.id), !window.styleMask.contains(.fullScreen) else { return }
         let finishedTimer = entry.timer?.snapshot().isFinished == true
-        let level: NSWindow.Level = entry.countdown.alwaysOnTop || finishedTimer ? .floating : .normal
+        let level: NSWindow.Level = tilePresentation != .lowered && (entry.countdown.alwaysOnTop || finishedTimer) ? .floating : .normal
         if window.level != level { window.level = level }
         let behavior: NSWindow.CollectionBehavior = entry.countdown.allSpaces || finishedTimer ? [.canJoinAllSpaces, .fullScreenPrimary] : [.fullScreenPrimary]
         if window.collectionBehavior != behavior { window.collectionBehavior = behavior }
@@ -433,13 +517,59 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     private func recoverOffscreenWindow(_ window: NSWindow) {
         if !NSScreen.screens.contains(where: { $0.visibleFrame.insetBy(dx: 60, dy: 60).intersects(window.frame) }) { window.center() }
     }
-    @objc private func refreshDisplays() {
-        displays = NSScreen.screens.map { DisplayChoice(id: screenID($0), name: $0.localizedName) }
-        for (id, window) in widgetWindows where !fullScreenIDs.contains(id) {
-            recoverOffscreenWindow(window)
+    private func restorePlacement(_ placement: WidgetPlacement, to window: NSWindow) {
+        if let frame = placement.restoredFrame(on: currentWidgetDisplays()) {
+            window.setFrame(frame, display: true)
         }
     }
-    @objc private func refreshAfterWake() { store.objectWillChange.send(); refreshTimers(); updateStatus(store.library) }
+    private func currentWidgetDisplays() -> [WidgetDisplay] {
+        displaySource?() ?? NSScreen.screens.map { WidgetDisplay(id: stableDisplayID($0), visibleFrame: $0.visibleFrame) }
+    }
+    func beginDisplayReconfiguration() {
+        guard !terminating else { return }
+        store.updateLibrary { displayLayouts.beginReconfiguration(in: &$0) }
+        displayConfigurationChanging = true
+        displayRefreshTask?.cancel()
+        for task in placementSaveTasks.values { task.cancel() }
+        placementSaveTasks.removeAll()
+        userPlacementEdits.removeAll()
+    }
+    @objc func refreshDisplays() {
+        guard !terminating else { return }
+        beginDisplayReconfiguration()
+        displays = NSScreen.screens.map { DisplayChoice(id: screenID($0), name: $0.localizedName) }
+        // Docks can expose their displays in stages. Require a quiet interval with
+        // unchanged identities and geometry; intermediate setups never overwrite others.
+        displayRefreshTask = Task { @MainActor [weak self] in
+            var previous = self?.currentWidgetDisplays() ?? []
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self, !self.terminating else { return }
+                let current = self.currentWidgetDisplays()
+                guard !current.isEmpty, current == previous else {
+                    previous = current
+                    continue
+                }
+                self.displays = NSScreen.screens.map { DisplayChoice(id: self.screenID($0), name: $0.localizedName) }
+                self.store.updateLibrary { _ = self.displayLayouts.activate(current, in: &$0) }
+                self.restoringFrame = true
+                for (id, window) in self.widgetWindows where !self.fullScreenIDs.contains(id) && !window.styleMask.contains(.fullScreen) {
+                    if let entry = self.store.entry(id), let placement = self.displayLayouts.placement(for: entry) {
+                        self.restorePlacement(placement, to: window)
+                    }
+                }
+                self.restoringFrame = false
+                self.displayConfigurationChanging = false
+                self.displayRefreshTask = nil
+                self.store.saveNow()
+                return
+            }
+        }
+    }
+    @objc private func refreshAfterWake(_ notification: Notification) {
+        if notification.name == NSWorkspace.didWakeNotification { refreshDisplays() }
+        store.objectWillChange.send(); refreshTimers(); updateStatus(store.library)
+    }
     @objc private func editTitle() {
         if let id = activeCountdownID { store.selectedID = id }
         showEditor()
@@ -492,11 +622,59 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
     }
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        let menu = NSMenu(); menu.delegate = self; statusItem?.menu = menu
+        let menu = NSMenu(); menu.delegate = self; statusMenu = menu
+        // An attached statusItem.menu consumes clicks before the button action can run.
+        if let button = statusItem?.button {
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.ignoresMultiClick = false
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.setAccessibilityLabel("Daylight")
+            button.setAccessibilityHelp(statusClickHelp)
+        }
         updateStatus(store.library)
     }
+    private var statusClickHelp: String {
+        "Click for the menu. Right-click or Control-click to bring tiles forward or send them back."
+    }
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        handleStatusItemClick(NSApp.currentEvent) {
+            statusMenu?.popUp(positioning: nil, at: NSPoint(x: sender.bounds.minX, y: sender.bounds.minY), in: sender)
+        }
+    }
+    func handleStatusItemClick(_ event: NSEvent?, showMenu: () -> Void) {
+        let secondaryClick = event?.type == .rightMouseUp ||
+            (event?.type == .leftMouseUp && event?.modifierFlags.contains(.control) == true)
+        guard secondaryClick else {
+            showMenu()
+            return
+        }
+        if tilePresentation == .raised && store.entries.allSatisfy(\.isVisible) && tilesAreUncovered() {
+            sendAllWidgetsToBack()
+        } else {
+            bringAllWidgetsToFront()
+        }
+    }
+    private func tilesAreUncovered() -> Bool {
+        let ids = Set(widgetWindows.values.map(\.windowNumber))
+        guard !ids.isEmpty else { return false }
+        // Read geometry and stacking only, once per click; no window titles or screen capture.
+        guard let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return true // Keep the explicit toggle usable if Window Server metadata is unavailable.
+        }
+        let windows: [TileWindowVisibility.Window] = info.compactMap { value in
+            guard let id = value[kCGWindowNumber as String] as? Int,
+                  let level = value[kCGWindowLayer as String] as? Int,
+                  level >= NSWindow.Level.normal.rawValue, level < NSWindow.Level.mainMenu.rawValue,
+                  (value[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                  let bounds = value[kCGWindowBounds as String] as? [String: Any],
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return nil }
+            return TileWindowVisibility.Window(id: id, frame: frame, level: level)
+        }
+        return TileWindowVisibility.areUncovered(ids, in: windows)
+    }
     func menuWillOpen(_ menu: NSMenu) {
-        guard menu === statusItem?.menu else { return }
+        guard menu === statusMenu else { return }
         menu.removeAllItems()
         menu.addItem(menuItem("Manage countdowns…", #selector(showEditor)))
         menu.addItem(menuItem("New countdown…", #selector(newCountdown)))
@@ -518,7 +696,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         }
         menu.addItem(.separator())
         menu.addItem(menuItem("Auto arrange tiles", #selector(autoArrange)))
-        menu.addItem(menuItem("Show all widgets", #selector(showAllWidgets)))
+        menu.addItem(menuItem("Show all widgets", #selector(bringAllWidgetsToFront)))
         menu.addItem(menuItem("Hide all widgets", #selector(hideAllWidgets)))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Daylight", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -536,7 +714,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
             let state = focus.snapshot()
             statusItem?.button?.image = NSImage(systemSymbolName: "timer", accessibilityDescription: "Focus timers")
             statusItem?.button?.title = state.isFinished ? " Done" : " \(state.clock)"
-            statusItem?.button?.toolTip = nextTimer.countdown.displayTitle
+            statusItem?.button?.toolTip = "\(nextTimer.countdown.displayTitle)\n\(statusClickHelp)"
             return
         }
         let next = library.entries.filter { $0.timer == nil && !$0.countdown.snapshot().hasPassed }.min { $0.countdown.target.date() < $1.countdown.target.date() }
@@ -545,14 +723,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSWindowDelegate, NS
         if let next {
             let state = next.countdown.snapshot()
             statusItem?.button?.title = state.isToday ? " Today" : " \(state.days)d"
-            statusItem?.button?.toolTip = "Daylight · \(library.entries.count) countdowns · \(next.countdown.displayTitle)"
+            statusItem?.button?.toolTip = "Daylight · \(library.entries.count) countdowns · \(next.countdown.displayTitle)\n\(statusClickHelp)"
         } else {
             statusItem?.button?.title = ""
-            statusItem?.button?.toolTip = "Daylight · Manage countdowns"
+            statusItem?.button?.toolTip = "Daylight\n\(statusClickHelp)"
         }
     }
     @objc private func showAbout() {
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Daylight", .applicationVersion: "2.6.1",
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.6.10"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "21"
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Daylight", .applicationVersion: "\(version) (\(build))",
                                                     .credits: NSAttributedString(string: "A day worth waiting for.\nIndependent countdowns, quietly on your desktop.")])
     }
 }

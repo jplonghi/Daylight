@@ -30,6 +30,8 @@ public struct CountdownEntry: Codable, Equatable, Identifiable, Sendable {
     public var countdown: Countdown
     public var isVisible: Bool
     public var placement: WidgetPlacement?
+    /// One independent placement per connected set of physical displays.
+    public var displayPlacements: [String: WidgetPlacement]?
     public var timer: FocusTimer?
 
     public init(id: UUID = UUID(), countdown: Countdown = Countdown(), isVisible: Bool = true, placement: WidgetPlacement? = nil, timer: FocusTimer? = nil) {
@@ -39,7 +41,7 @@ public struct CountdownEntry: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct CountdownLibrary: Codable, Equatable, Sendable {
-    public var version = 3
+    public var version = 4
     public var entries: [CountdownEntry]
     public var selectedID: UUID?
 
@@ -49,8 +51,10 @@ public struct CountdownLibrary: Codable, Equatable, Sendable {
 
     public var selected: CountdownEntry? { entries.first { $0.id == selectedID } }
     public var isValid: Bool {
-        version == 3 && Set(entries.map(\.id)).count == entries.count
-            && entries.allSatisfy { $0.countdown.isValid && ($0.placement?.isValid ?? true) && ($0.timer?.isValid ?? true) && ($0.timer == nil || $0.countdown.style == .ring) }
+        version == 4 && Set(entries.map(\.id)).count == entries.count
+            && entries.allSatisfy { $0.countdown.isValid && ($0.placement?.isValid ?? true)
+                && ($0.displayPlacements?.allSatisfy { !$0.key.isEmpty && $0.value.isValid } ?? true)
+                && ($0.timer?.isValid ?? true) && ($0.timer == nil || $0.countdown.style == .ring) }
             && (entries.isEmpty ? selectedID == nil : selected != nil)
     }
 
@@ -108,8 +112,8 @@ public enum CountdownLibraryFile {
         let decoder = JSONDecoder()
         if object?["version"] != nil || object?["entries"] != nil {
             var library = try decoder.decode(CountdownLibrary.self, from: data)
-            let migrated = library.version == 2
-            if migrated { library.version = 3 }
+            let migrated = library.version == 2 || library.version == 3
+            if migrated { library.version = 4 }
             guard library.isValid else { throw CocoaError(.coderReadCorrupt) }
             return Loaded(library: library, migrated: migrated)
         }

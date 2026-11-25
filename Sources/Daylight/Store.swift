@@ -27,11 +27,11 @@ final class CountdownStore: ObservableObject {
         set { guard let id = selectedID else { return }; update(id) { $0.countdown = newValue } }
     }
 
-    init() {
+    init(dataDirectory: URL? = nil) {
         demo = ProcessInfo.processInfo.arguments.contains("--demo")
         let override = ProcessInfo.processInfo.environment["DAYLIGHT_DATA_DIR"]
-        isTestProfile = demo || override != nil
-        let base = override.map { URL(fileURLWithPath: $0) }
+        isTestProfile = demo || override != nil || dataDirectory != nil
+        let base = dataDirectory ?? override.map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Daylight")
         fileURL = base.appendingPathComponent("countdown.json")
         library = CountdownLibrary()
@@ -50,8 +50,12 @@ final class CountdownStore: ObservableObject {
     func entry(_ id: UUID) -> CountdownEntry? { entries.first { $0.id == id } }
 
     func update(_ id: UUID, _ change: (inout CountdownEntry) -> Void) {
+        updateLibrary { $0.update(id, change) }
+    }
+
+    func updateLibrary(_ change: (inout CountdownLibrary) -> Void) {
         var next = library
-        next.update(id, change)
+        change(&next)
         if next != library { library = next }
     }
 

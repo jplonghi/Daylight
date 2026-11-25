@@ -15,6 +15,7 @@ final class TileWindow: NSWindow {
 
     var openEditor: (() -> Void)?
     var selectOccasion: (() -> Void)?
+    var beginUserMove: (() -> Void)?
     var hasAcknowledgmentButton = false
     private var pendingMouseDown: NSEvent?
 
@@ -25,6 +26,7 @@ final class TileWindow: NSWindow {
             if hypot(pointer.x - start.x, pointer.y - start.y) >= 3 {
                 // performDrag returns immediately and may consume mouse-up itself.
                 pendingMouseDown = nil
+                beginUserMove?()
                 performDrag(with: mouseDown)
             }
             return

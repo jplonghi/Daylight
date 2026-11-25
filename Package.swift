@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "DaylightCore"),
         .executableTarget(name: "Daylight", dependencies: ["DaylightCore"]),
-        .testTarget(name: "DaylightCoreTests", dependencies: ["DaylightCore"])
+        .testTarget(name: "DaylightCoreTests", dependencies: ["DaylightCore"]),
+        .testTarget(name: "DaylightAppTests", dependencies: ["Daylight", "DaylightCore"])
     ]
 )

@@ -28,8 +28,13 @@ public struct FocusTimer: Codable, Equatable, Sendable {
     /// The selected clock time belongs to today, never silently to tomorrow.
     public static func finishingToday(at clockTime: Date, now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) -> FocusTimer? {
         let parts = calendar.dateComponents([.hour, .minute], from: clockTime)
-        guard let hour = parts.hour, let minute = parts.minute,
-              let end = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: now),
+        guard let hour = parts.hour, let minute = parts.minute else { return nil }
+        return finishingToday(hour: (hour + 11) % 12 + 1, minute: minute, isPM: hour >= 12, now: now, calendar: calendar)
+    }
+
+    public static func finishingToday(hour: Int, minute: Int, isPM: Bool, now: Date = Date(), calendar: Calendar = .autoupdatingCurrent) -> FocusTimer? {
+        guard (1...12).contains(hour), (0...59).contains(minute),
+              let end = calendar.date(bySettingHour: hour % 12 + (isPM ? 12 : 0), minute: minute, second: 0, of: now),
               calendar.isDate(end, inSameDayAs: now), end > now else { return nil }
         return FocusTimer(startedAt: now, endsAt: end)
     }

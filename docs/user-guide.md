@@ -4,7 +4,7 @@ Independent countdown widgets for your Mac, with a quiet menu-bar app and automa
 
 ## Your countdowns
 
-Open **Daylight** from your Applications folder, or click its ring icon in the menu bar and choose **Manage countdowns…**.
+Open **Daylight** from your Applications folder, or left-click its ring icon in the menu bar and choose **Manage countdowns…**.
 
 Use **New countdown** (⌘N) to add a countdown. Choose a title, target date, style and one of ten color presets. Each countdown has its own desktop window and settings. Switch directly between the visible countdown tabs above the editor; scroll the tab strip if you have more countdowns than fit. **Delete** removes the selected countdown immediately.
 
@@ -16,7 +16,7 @@ Ten coordinated color presets are available in the editor and timer creation: **
 
 ## Focus timers
 
-Click **New timer** (⌘T) in the editor or menu bar. Choose **15**, **25**, **45** or **60 minutes**, enter a custom duration from 1 to 1,440 minutes, or choose **Finish at** to set an exact clock time today. Times that have already passed are rejected. Give the session a name and press **Start timer**.
+Click **New timer** (⌘T) in the editor or menu bar. Choose **15**, **25**, **45** or **60 minutes**, enter a custom duration from 1 to 1,440 minutes, or choose **Finish at** to set an exact clock time today. Type into the large **Hour** (1–12) and **Minute** (00–59) fields, and select **AM** or **PM** using the separate buttons. Scroll over either field with a mouse wheel or two-finger trackpad gesture to adjust it, or use the **up/down arrows** below it. Hours wrap between 1 and 12, and minutes between 00 and 59; each field adjusts independently of the other field and AM/PM. Tab moves between the fields. Invalid entries and times that have already passed keep Start timer disabled. Give the session a name and press **Start timer**.
 
 A temporary ring widget shows minutes and seconds remaining (including hours for longer sessions). The ring drains to zero. Its title, colors, size and display work like the other widgets; focus timers always use Ring. Timers are independent and can run together.
 
@@ -38,13 +38,17 @@ This app uses freely resizable desktop windows; it does not add a WidgetKit exte
 
 ## Menu bar, Dock, login and restart
 
-While the main window is open, Daylight appears in the Dock and has the normal application menu at the top of the screen. Closing the main window removes that Dock/menu presence and leaves tiles, timers and the menu-bar icon running. Double-click a tile or choose **Manage countdowns…** from the menu-bar icon to reopen it. The menu-bar icon shows an active timer when present, or the next upcoming date countdown.
+**Left-click the menu-bar icon** to open the normal menu with creation, arrangement, visibility and Quit actions. Choose **Manage countdowns…** to open the main window. **Right-click or Control-click** to immediately show and bring all countdown and timer tiles to the front, including hidden tiles, in their saved positions. **Right-click again to send the tiles behind other windows**, leaving them visible on the desktop. If another window has covered a tile, the next right-click brings the tiles forward instead. Raising tiles keeps keyboard focus in your current app. Saved positions and always-on-top preferences stay unchanged; pinned tiles are temporarily lowered when sent back. The icon shows an active timer when present, or the next upcoming date countdown.
+
+While the main window is open, Daylight appears in the Dock and has the normal application menu at the top of the screen. Closing the main window removes that Dock/menu presence and leaves tiles, timers and the menu-bar icon running. Double-click a tile, or left-click the menu-bar icon and choose **Manage countdowns…**, to reopen it.
 
 **Launch at login** uses Apple’s `SMAppService` API. The installed copy enables it on its first version 2 launch; you can turn it off in the editor. If macOS needs approval, choose **Finish setup…** and allow Daylight in **System Settings → General → Login Items & Extensions**.
 
 Keep the app in **~/Applications/Daylight.app** or **/Applications/Daylight.app**, so its login-item registration points to a stable location. Development and isolated test copies do not automatically register login items.
 
-After restarting and signing in, visible widgets reopen with their own style, size and position. The editor stays closed after the first launch. A disconnected monitor causes affected widgets to appear on an available display. Full-screen sessions restore as normal resizable windows. No app can display these windows before you sign in to macOS.
+After restarting and signing in, visible widgets reopen with their own style, size and position. The editor stays closed after the first launch. **Each connected monitor combination has its own saved layout.** Arrange tiles on the laptop alone, then arrange them with your dock connected; Daylight remembers both, including tiles spread across different screens. Setups with one, two or more external displays are remembered separately. Moving, resizing or using Auto arrange changes only the current setup's layout. Reconnecting a known setup restores its positions and sizes, even after restarting Daylight.
+
+Layouts follow the identities of the connected monitors. Changing the main display, monitor order or resolution does not create a new layout; positions are relative to their screen and kept within its available area. A dock can take a few seconds to bring all screens online, and Daylight waits for the display changes to settle before restoring the layout. For a setup you have never used before, tiles start from their previous placements or an available screen; arrange them once to save that setup. Hidden tiles stay hidden. Full-screen sessions restore as normal resizable windows. No app can display these windows before you sign in to macOS.
 
 **Quit Daylight** closes the app now but remembers which widgets should reopen next time. To keep a widget from reopening, close that widget or choose Hide all before quitting. To stop automatic startup, turn off Launch at login.
 
@@ -74,6 +78,6 @@ Ten paired color presets, long-title wrapping, accessible countdown summaries an
 
 ## Local data and recovery
 
-Countdowns, active timers and window placements are stored in `~/Library/Application Support/Daylight/countdown.json`. Writes are atomic, save after edits and flush on quit/logout. Stable display UUIDs and relative screen positions allow monitor layouts to change safely. Version 2.2 upgrades this file to schema 3 and backs up the prior collection before writing it; all countdown entries are preserved.
+Countdowns, active timers and window placements are stored in `~/Library/Application Support/Daylight/countdown.json`. Writes are atomic, save after edits and flush on quit/logout. Stable display UUIDs and relative screen positions allow monitor layouts to change safely. Version 2.6.5 (build 16) upgrades this file to schema 4, adding each tile's `displayPlacements` for the connected monitor combinations. The app backs up the prior collection before writing it; countdowns, timers and existing placements are preserved. Earlier versions stored only one placement per tile, so arrange each setup once after upgrading if its previous positions were already overwritten.
 
 Failed saves show Retry. Unreadable files pause automatic saves and offer **Back up & start fresh**, which copies the original first. Migration from version 1 likewise creates a uniquely named `countdown-backup-….json` beside the original.

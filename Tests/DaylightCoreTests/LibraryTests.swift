@@ -121,7 +121,7 @@ final class LibraryTests: XCTestCase {
     func testUnknownFormatDoesNotFallBackToSingleCountdown() throws {
         try withFile { url in
             var future = CountdownLibrary()
-            future.version = 4
+            future.version = 5
             let data = try JSONEncoder().encode(future)
             try data.write(to: url)
             XCTAssertThrowsError(try CountdownLibraryFile.read(from: url))

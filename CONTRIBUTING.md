@@ -11,6 +11,8 @@ Keep UI and macOS integration in `Sources/Daylight`; keep testable domain behavi
 
 Before opening a pull request, describe the problem, the change, and how you verified it. For UI changes, include a screenshot using demo data and manually check the relevant widget sizes. Core tests do not verify native dragging, login items, audio, or Gatekeeper.
 
+`DisplayLayoutIntegrationTests` exercises native windows and the controller's display transitions with temporary data. It requires access to a Window Server session with at least two connected displays, and skips when unavailable. It simulates display changes without changing the host's monitor settings; a physical dock reconnect still needs manual testing.
+
 ## Isolated manual testing
 
 Quit the development app before rebuilding its bundle. `DAYLIGHT_DATA_DIR` selects a separate data directory; `--demo` disables file reads and writes. Test profiles do not automatically register login items.

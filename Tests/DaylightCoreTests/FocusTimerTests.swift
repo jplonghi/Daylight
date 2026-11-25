@@ -53,6 +53,32 @@ final class FocusTimerTests: XCTestCase {
         XCTAssertNil(FocusTimer.finishingToday(at: start.addingTimeInterval(-3600), now: start, calendar: cal))
     }
 
+    func testTypedTwelveHourTimeFinishesAtSelectedHourAndMinute() {
+        let cal = calendar()
+        let start = cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 13))!
+        let timer = FocusTimer.finishingToday(hour: 2, minute: 35, isPM: true, now: start, calendar: cal)
+        XCTAssertEqual(timer?.endsAt, cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 14, minute: 35)))
+        XCTAssertNil(FocusTimer.finishingToday(hour: 2, minute: 35, isPM: false, now: start, calendar: cal))
+    }
+
+    func testTwelveAMAndTwelvePMMeanMidnightAndNoon() {
+        let cal = calendar()
+        let start = cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 0, minute: 1))!
+        let early = FocusTimer.finishingToday(hour: 12, minute: 5, isPM: false, now: start, calendar: cal)
+        let noon = FocusTimer.finishingToday(hour: 12, minute: 0, isPM: true, now: start, calendar: cal)
+        XCTAssertEqual(early?.endsAt, cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 0, minute: 5)))
+        XCTAssertEqual(noon?.endsAt, cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 12)))
+        XCTAssertNil(FocusTimer.finishingToday(hour: 12, minute: 0, isPM: false, now: start, calendar: cal))
+    }
+
+    func testInvalidTypedClockNumbersDoNotNormalizeIntoAnotherTime() {
+        let cal = calendar()
+        let start = cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 0))!
+        for (hour, minute) in [(0, 30), (13, 30), (-1, 30), (2, -1), (2, 60), (2, 999)] {
+            XCTAssertNil(FocusTimer.finishingToday(hour: hour, minute: minute, isPM: true, now: start, calendar: cal))
+        }
+    }
+
     func testPastMidnightIsNotSilentlyScheduledForTomorrow() {
         let cal = calendar()
         let start = cal.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 23, minute: 50))!
@@ -127,7 +153,7 @@ final class FocusTimerTests: XCTestCase {
         try data.write(to: url)
         let loaded = try CountdownLibraryFile.read(from: url)
         XCTAssertTrue(loaded.migrated)
-        XCTAssertEqual(loaded.library.version, 3)
+        XCTAssertEqual(loaded.library.version, 4)
         XCTAssertEqual(loaded.library.entries, old.entries)
         XCTAssertEqual(loaded.library.selectedID, old.selectedID)
         XCTAssertEqual(try Data(contentsOf: url), data)
